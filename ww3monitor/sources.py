@@ -47,14 +47,14 @@ def _gdelt_time(s: str) -> str:
 
 
 def gdelt_articles(theater: str, start: datetime | None = None, end: datetime | None = None,
-                   timespan: str = "1d") -> list[dict]:
+                   timespan: str = "1d", retries: int = 4) -> list[dict]:
     params = {"query": _gdelt_query(theater), "mode": "artlist", "maxrecords": 250, "sort": "datedesc"}
     if start and end:
         params["startdatetime"] = start.strftime("%Y%m%d%H%M%S")
         params["enddatetime"] = end.strftime("%Y%m%d%H%M%S")
     else:
         params["timespan"] = timespan
-    data = _gdelt(params)
+    data = _gdelt(params, retries=retries)
     return [{
         "url": a["url"], "title": a.get("title", "").strip(), "summary": "",
         "published": _gdelt_time(a["seendate"]), "source": a.get("domain", ""),
