@@ -22,3 +22,11 @@ def test_casualties():
     assert casualties("Hundreds killed in bombardment") == 200
     assert severity("Strike kills at least 52 people")[0] == 4
     assert casualties("In 2024 talks began") == 0
+
+
+def test_regressions():
+    assert casualties("Zelenskyy says 40 now confirmed dead after attack") == 40
+    assert severity("Farmers rebuild years after the full-scale invasion")[0] < 4
+    assert severity("Russia launches invasion of neighbour")[0] >= 4
+    from ww3monitor.classify import off_topic
+    assert off_topic("Ice hockey federation opposes reinstatement of Russia")

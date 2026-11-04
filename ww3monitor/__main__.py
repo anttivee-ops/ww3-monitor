@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import sources, store, timeline
-from .classify import severity, theaters_for
+from .classify import off_topic, severity, theaters_for
 from .config import THEATERS
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -67,14 +67,19 @@ def backfill(db, days: int):
 
 def rescore(db):
     rows = db.execute("SELECT id, title, summary, theaters FROM events").fetchall()
+    dropped = 0
     for id_, title, summary, th in rows:
+        if off_topic(title):
+            db.execute("DELETE FROM events WHERE id=?", (id_,))
+            dropped += 1
+            continue
         text = f"{title}. {summary}"
         sev, cues = severity(text)
         new_th = theaters_for(text) or json.loads(th)
         db.execute("UPDATE events SET severity=?, cues=?, theaters=? WHERE id=?",
                    (sev, json.dumps(cues), json.dumps(new_th), id_))
     db.commit()
-    print(f"rescored {len(rows)} events")
+    print(f"rescored {len(rows) - dropped} events, dropped {dropped} off-topic")
 
 
 def main():

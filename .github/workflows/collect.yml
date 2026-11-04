@@ -19,11 +19,14 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with: { ref: main }   # always build on the latest data, not the trigger commit
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - name: Backfill
         if: ${{ github.event.inputs.backfill_days != '' && github.event.inputs.backfill_days != '0' }}
         run: python -m ww3monitor backfill --days ${{ github.event.inputs.backfill_days }}
+      - name: Rescore stored events with current rules
+        run: python -m ww3monitor rescore
       - name: Collect
         run: python -m ww3monitor collect
       - name: Commit data
@@ -32,4 +35,4 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git add data/
           git diff --cached --quiet || git commit -m "data: collect $(date -u +%FT%TZ)"
-          git push
+          for i in 1 2 3; do git pull --rebase -X theirs origin main && git push && break; sleep 5; done

@@ -4,7 +4,7 @@ import re
 import sqlite3
 from pathlib import Path
 
-from .classify import severity, theaters_for
+from .classify import off_topic, severity, theaters_for
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS events (
@@ -46,6 +46,8 @@ def title_key(title: str) -> str:
 def add(db: sqlite3.Connection, item: dict) -> bool:
     title = _STRIP_HTML.sub("", item["title"]).strip()
     summary = _STRIP_HTML.sub("", item.get("summary") or "").strip()[:600]
+    if off_topic(title):
+        return False
     text = f"{title}. {summary}"
     theaters = theaters_for(text)
     if not theaters and item.get("query_theater"):

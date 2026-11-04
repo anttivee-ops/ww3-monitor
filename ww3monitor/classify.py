@@ -1,7 +1,7 @@
 """Theater tagging and rule-based severity scoring."""
 import re
 
-from .config import CASUALTY_FLOORS, SEVERITY_RULES, THEATERS
+from .config import CASUALTY_FLOORS, OFF_TOPIC, SEVERITY_RULES, THEATERS
 
 _THEATER_RX = {k: [re.compile(p, re.I) for p in v["patterns"]] for k, v in THEATERS.items()}
 _SEV_RX = {lvl: [re.compile(p, re.I) for p in pats] for lvl, pats in SEVERITY_RULES.items()}
@@ -9,8 +9,15 @@ _SEV_RX = {lvl: [re.compile(p, re.I) for p in pats] for lvl, pats in SEVERITY_RU
 _NUM_WORDS = {"dozens": 24, "scores": 40, "hundreds": 200, "thousands": 2000}
 _CASUALTY_RX = [
     re.compile(r"\b(?:kill(?:s|ed|ing)?|dead|deaths?|death toll)\D{0,25}?(?:at least |more than |over |nearly )?(\d[\d,]*|dozens|scores|hundreds|thousands)\b", re.I),
-    re.compile(r"\b(\d[\d,]*|dozens|scores|hundreds|thousands)\s+(?:people |civilians |soldiers |troops )?(?:were |are )?(?:killed|dead|die[ds]?)\b", re.I),
+    re.compile(r"\b(\d[\d,]*|dozens|scores|hundreds|thousands)\s+(?:[a-z]+\s+){0,3}?(?:killed|dead|die[ds]?)\b", re.I),
 ]
+
+
+_OFF_RX = [re.compile(p, re.I) for p in OFF_TOPIC]
+
+
+def off_topic(title: str) -> bool:
+    return any(r.search(title) for r in _OFF_RX)
 
 
 def theaters_for(text: str) -> list[str]:

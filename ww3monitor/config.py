@@ -92,7 +92,7 @@ SEVERITY_RULES = {
         r"\bmissile barrage\b", r"\bmobili[sz]ation\b", r"\bblockade\b",
         r"\bclos\w* (the )?strait\b", r"\bnuclear (plant|facility|site)\b.*\b(struck|hit|attack|strike)",
         r"\b(strike|attack)s? on (an? )?nuclear\b", r"\bkilled .*\b(commander|general|leader)\b",
-        r"\bassassinat\w*\b", r"\binvasion\b", r"\bground (offensive|invasion)\b",
+        r"\bassassinat\w*\b", r"\b(launch|begin|start)\w* (an? |the )?invasion\b", r"\bground (offensive|invasion)\b",
         r"\bdirect (attack|strike|confrontation)\b", r"\bwar(ship)? sunk\b|\bsinks?\b.*\b(warship|destroyer|frigate|carrier)\b",
         r"\bairspace\b.*\b(shot down|downed)\b", r"\bevacuat\w* (embassy|citizens)\b",
     ],
@@ -114,6 +114,11 @@ SEVERITY_RULES = {
         r"\bpeace\b", r"\bsummit\b", r"\bprisoner (swap|exchange)\b", r"\baid\b",
     ],
 }
+
+# Items whose headline matches these are dropped (sport, culture, lifestyle).
+OFF_TOPIC = [
+    r"\b(hockey|football|soccer|olympic\w*|fifa|uefa|tennis|basketball|eurovision|box office|recipe)\b",
+]
 
 # Casualty counts bump severity: (minimum killed, floor severity)
 CASUALTY_FLOORS = [(500, 5), (50, 4), (5, 3)]

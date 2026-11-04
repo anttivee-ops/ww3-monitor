@@ -2,6 +2,7 @@
 import email.utils
 import json
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -9,7 +10,7 @@ from datetime import datetime, timezone
 
 from .config import CONFLICT_GDELT, RSS_FEEDS, THEATERS
 
-UA = "ww3-monitor/0.1 (news aggregation; +https://github.com)"
+UA = "Mozilla/5.0 (compatible; ww3-monitor/0.2; +https://github.com/anttivee-ops/ww3-monitor)"
 GDELT = "https://api.gdeltproject.org/api/v2/doc/doc"
 GDELT_PAUSE = 5.5  # GDELT asks for at most one request every 5 seconds
 
@@ -20,9 +21,16 @@ def _get(url: str, timeout: int = 30) -> bytes:
         return r.read()
 
 
-def _gdelt(params: dict) -> dict:
+def _gdelt(params: dict, retries: int = 4) -> dict:
     url = GDELT + "?" + urllib.parse.urlencode({**params, "format": "json"})
-    body = _get(url, timeout=60)
+    for attempt in range(retries + 1):
+        try:
+            body = _get(url, timeout=60)
+            break
+        except urllib.error.HTTPError as e:
+            if e.code != 429 or attempt == retries:
+                raise
+            time.sleep(15 * 2 ** attempt)  # 15, 30, 60, 120 s
     time.sleep(GDELT_PAUSE)
     try:
         return json.loads(body)
