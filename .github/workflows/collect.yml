@@ -1,5 +1,8 @@
 name: collect
 on:
+  push:
+    branches: [main]
+    paths: ["ww3monitor/**", ".github/workflows/**"]
   schedule:
     - cron: "17 */3 * * *"   # every 3 hours
   workflow_dispatch:
