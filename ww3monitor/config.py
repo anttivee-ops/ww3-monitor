@@ -72,7 +72,6 @@ RSS_FEEDS = {
     "DW": "https://rss.dw.com/rdf/rss-en-world",
     "France 24": "https://www.france24.com/en/rss",
     "Kyiv Independent": "https://kyivindependent.com/news-archive/rss/",
-    "Times of Israel": "https://www.timesofisrael.com/feed/",
     "Defense News": "https://www.defensenews.com/arc/outboundfeeds/rss/?outputType=xml",
 }
 
@@ -129,3 +128,49 @@ SEVERITY_WEIGHT = {1: 0.5, 2: 1.0, 3: 2.0, 4: 5.0, 5: 15.0}
 SEVERITY_LABEL = {
     1: "Background", 2: "Posturing", 3: "Kinetic", 4: "Major escalation", 5: "Critical",
 }
+
+# --- GDELT event files -------------------------------------------------------
+# Theater membership for coded events. Location codes are FIPS 10-4 (GDELT's
+# ActionGeo_CountryCode); actor codes are CAMEO 3-letter country codes.
+#   geo:            event happens in one of these countries
+#   geo_with_actor: event happens in these countries AND involves one of these actors
+#   pairs:          one actor from each set, anywhere in the world
+_GULF = {"USA", "SAU", "ARE", "BHR", "QAT", "KWT", "OMN"}
+_NATO = {"USA", "GBR", "FRA", "DEU", "POL", "EST", "LVA", "LTU", "FIN", "SWE", "NOR", "DNK",
+         "ROU", "BGR", "CZE", "SVK", "HUN", "NLD", "BEL", "ITA", "ESP", "TUR", "CAN"}
+THEATER_RULES = {
+    "iran_israel": {
+        "geo": {"IR", "IS", "LE", "GZ", "WE", "YM"},
+        "pairs": [({"IRN"}, {"ISR"} | _GULF), ({"ISR"}, {"LBN", "SYR", "YEM", "PSE"})],
+    },
+    "russia_ukraine": {
+        "geo": {"UP"},
+        "geo_with_actor": [({"RS", "BO"}, {"UKR"})],
+        "pairs": [({"RUS"}, {"UKR"})],
+    },
+    "nato_russia": {
+        "geo_with_actor": [({"EN", "LG", "LH", "PL", "FI", "RO", "MD", "SW", "NO"}, {"RUS"})],
+        "pairs": [({"RUS", "BLR"}, _NATO)],
+    },
+    "china_taiwan": {
+        "geo": {"TW"},
+        "geo_with_actor": [({"RP", "CH"}, {"TWN", "PHL"})],
+        "pairs": [({"CHN"}, {"TWN", "PHL", "USA", "JPN"})],
+    },
+    "korea": {
+        "geo": {"KN"},
+        "geo_with_actor": [({"KS", "JA"}, {"PRK"})],
+        "pairs": [({"PRK"}, {"KOR", "USA", "JPN"})],
+    },
+    "india_pakistan": {
+        "pairs": [({"IND"}, {"PAK"})],
+    },
+}
+
+# Severity tiers for coded events (from CAMEO codes, see gdelt_events.tier_for).
+EVENT_TIER_LABEL = {
+    1: "Verbal conflict", 2: "Threats & coercion", 3: "Armed violence",
+    4: "Heavy weapons", 5: "Mass violence / WMD",
+}
+# Heat contribution per event (multiplied by 1 + log2(articles covering it)).
+EVENT_TIER_WEIGHT = {1: 0.1, 2: 0.3, 3: 1.0, 4: 3.0, 5: 8.0}

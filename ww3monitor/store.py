@@ -66,7 +66,3 @@ def add(db: sqlite3.Connection, item: dict) -> bool:
         (item["url"], key, title, summary, item["source"], item["origin"], item["published"], day,
          json.dumps(theaters), sev, json.dumps(cues)))
     return cur.rowcount == 1
-
-
-def put_volume(db, theater: str, rows):
-    db.executemany("INSERT OR REPLACE INTO volume VALUES (?,?,?,?)", [(theater, *r) for r in rows])

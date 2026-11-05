@@ -1,76 +1,19 @@
-"""Fetchers: GDELT DOC 2.0 API and RSS/Atom feeds. Stdlib only."""
+"""RSS/Atom feed fetcher for the headline list. Stdlib only.
+(GDELT coded events are handled in gdelt_events.py.)"""
 import email.utils
-import json
-import time
-import urllib.error
-import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
-from .config import CONFLICT_GDELT, RSS_FEEDS, THEATERS
+from .config import RSS_FEEDS
 
-UA = "Mozilla/5.0 (compatible; ww3-monitor/0.2; +https://github.com/anttivee-ops/ww3-monitor)"
-GDELT = "https://api.gdeltproject.org/api/v2/doc/doc"
-GDELT_PAUSE = 5.5  # GDELT asks for at most one request every 5 seconds
+UA = "Mozilla/5.0 (compatible; ww3-monitor/0.3; +https://github.com/anttivee-ops/ww3-monitor)"
 
 
 def _get(url: str, timeout: int = 30) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": UA})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.read()
-
-
-def _gdelt(params: dict, retries: int = 4) -> dict:
-    url = GDELT + "?" + urllib.parse.urlencode({**params, "format": "json"})
-    for attempt in range(retries + 1):
-        try:
-            body = _get(url, timeout=60)
-            break
-        except urllib.error.HTTPError as e:
-            if e.code != 429 or attempt == retries:
-                raise
-            time.sleep(15 * 2 ** attempt)  # 15, 30, 60, 120 s
-    time.sleep(GDELT_PAUSE)
-    try:
-        return json.loads(body)
-    except json.JSONDecodeError:  # GDELT returns plain-text errors
-        raise RuntimeError(body[:200].decode("utf-8", "replace"))
-
-
-def _gdelt_query(theater: str) -> str:
-    return f'{THEATERS[theater]["gdelt"]} {CONFLICT_GDELT} sourcelang:english'
-
-
-def _gdelt_time(s: str) -> str:
-    return datetime.strptime(s, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc).isoformat()
-
-
-def gdelt_articles(theater: str, start: datetime | None = None, end: datetime | None = None,
-                   timespan: str = "1d", retries: int = 4) -> list[dict]:
-    params = {"query": _gdelt_query(theater), "mode": "artlist", "maxrecords": 250, "sort": "datedesc"}
-    if start and end:
-        params["startdatetime"] = start.strftime("%Y%m%d%H%M%S")
-        params["enddatetime"] = end.strftime("%Y%m%d%H%M%S")
-    else:
-        params["timespan"] = timespan
-    data = _gdelt(params, retries=retries)
-    return [{
-        "url": a["url"], "title": a.get("title", "").strip(), "summary": "",
-        "published": _gdelt_time(a["seendate"]), "source": a.get("domain", ""),
-        "origin": "gdelt", "query_theater": theater,
-    } for a in data.get("articles", [])]
-
-
-def gdelt_volume(theater: str, timespan: str = "3months") -> list[tuple[str, int, float]]:
-    """Daily (date, article count, share-of-all-coverage) for a theater."""
-    data = _gdelt({"query": _gdelt_query(theater), "mode": "timelinevolraw", "timespan": timespan})
-    series = (data.get("timeline") or [{}])[0].get("data", [])
-    out = []
-    for p in series:
-        day = p["date"][:8]
-        out.append((f"{day[:4]}-{day[4:6]}-{day[6:]}", int(p["value"]), float(p.get("norm") or 0)))
-    return out
 
 
 def _text(el, *tags):

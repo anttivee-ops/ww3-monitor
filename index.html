@@ -79,7 +79,7 @@ td a { color: var(--ink); text-decoration: none; } td a:hover { text-decoration:
 <main>
   <header>
     <h1>Conflict Escalation Monitor</h1>
-    <p class="sub">How often things happen in each flashpoint, and how severe they are, from news coverage.</p>
+    <p class="sub">How often conflict events happen in each flashpoint and how severe they are, from GDELT's machine-coded event stream plus news headlines.</p>
     <p class="meta" id="meta">Loading…</p>
   </header>
 
@@ -95,28 +95,37 @@ td a { color: var(--ink); text-decoration: none; } td a:hover { text-decoration:
   <div class="grid2">
     <section class="card">
       <h2>Escalation heat by theater</h2>
-      <p class="sub" style="font-size:12.5px">Daily sum of event weights (severity 1→5 = 0.5, 1, 2, 5, 15)</p>
+      <p class="sub" style="font-size:12.5px">Daily sum of coded conflict events, weighted by severity tier and by how widely each was reported</p>
       <div class="legend" id="heatLegend"></div>
       <div class="chartbox"><canvas id="heatChart" aria-label="Daily escalation heat by theater"></canvas></div>
     </section>
     <section class="card">
       <h2>Severity mix</h2>
-      <p class="sub" style="font-size:12.5px">Share of events in each tier, selected range</p>
+      <p class="sub" style="font-size:12.5px">Share of coded conflict events in each tier, selected range</p>
       <div class="legend" id="sevLegend"></div>
       <div class="chartbox"><canvas id="mixChart" aria-label="Severity distribution"></canvas></div>
     </section>
   </div>
 
-  <section class="multiples" id="multiples" aria-label="Events per day by theater"></section>
+  <section class="multiples" id="multiples" aria-label="Violent events per day by theater"></section>
 
   <section class="card" style="margin-top:12px">
-    <h2>Most severe events</h2>
-    <p class="sub" style="font-size:12.5px">Severity 3 and above, newest first within each tier</p>
+    <h2>Most-reported violent events</h2>
+    <p class="sub" style="font-size:12.5px">Coded events of tier 3 and above, ranked by severity, then by number of articles</p>
     <div class="tablewrap"><table>
-      <thead><tr><th>When</th><th>Severity</th><th>Headline</th><th class="src">Source</th></tr></thead>
+      <thead><tr><th>When</th><th>Severity</th><th>What happened</th><th class="src">Articles</th></tr></thead>
       <tbody id="events"></tbody>
     </table></div>
-    <p class="note">Severity comes from keyword rules plus casualty-count extraction, not from editorial judgement. Read it as a coarse signal and click through to the source.</p>
+    <p class="note">Events are machine-coded by GDELT from news text. Individual rows can be miscoded or duplicated, so read the trend more than any single event, and check the linked source.</p>
+  </section>
+
+  <section class="card" style="margin-top:12px">
+    <h2>Latest headlines</h2>
+    <p class="sub" style="font-size:12.5px">From BBC, Al Jazeera, Guardian, NYT, DW, France 24, Kyiv Independent and Defense News. Severity from keyword rules.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>When</th><th>Severity</th><th>Headline</th><th class="src">Source</th></tr></thead>
+      <tbody id="headlines"></tbody>
+    </table></div>
   </section>
 </main>
 
@@ -136,33 +145,37 @@ td a { color: var(--ink); text-decoration: none; } td a:hover { text-decoration:
   const save = () => { try { localStorage.setItem("ww3-ui", JSON.stringify(state)); } catch (e) {} };
 
   const fmtDay = d => new Date(d + "T00:00:00Z").toLocaleDateString(undefined, {month: "short", day: "numeric", timeZone: "UTC"});
-  const sevName = s => data.severity_labels[s];
-  const sevBadge = s => `<span class="badge"><span class="dot" style="background:var(${SEVV[s-1]})"></span>${s} · ${sevName(s)}</span>`;
-  const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  const badge = (s, labels) => `<span class="badge"><span class="dot" style="background:var(${SEVV[s-1]})"></span>${s} · ${esc(labels[s])}</span>`;
+  const tierBadge = s => badge(s, data.severity_labels);
+  const headBadge = s => badge(s, data.headline_labels);
+  const fmtNum = n => n >= 10000 ? (n / 1000).toFixed(0) + "k" : n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n);
 
   const gen = new Date(data.generated);
+  const cov = data.coverage || {};
   const errs = data.last_run ? Object.keys(data.last_run.errors).length : 0;
   document.getElementById("meta").textContent =
-    `Updated ${gen.toLocaleString()} · ${data.total_events.toLocaleString()} events stored` + (errs ? ` · ${errs} sources failed on last run` : "");
+    `Updated ${gen.toLocaleString()} · ` +
+    (cov.days_with_data ? `${cov.days_with_data} days of coded events since ${fmtDay(cov.first_day)} (${(cov.events_coded || 0).toLocaleString()} events scanned)` : "No coded events yet") +
+    (errs ? ` · ${errs} sources failed on last run` : "");
 
   const sel = document.getElementById("theater");
   keys.forEach(k => sel.insertAdjacentHTML("beforeend", `<option value="${k}">${esc(data.theaters[k])}</option>`));
 
-  // Legends
   document.getElementById("heatLegend").innerHTML = keys.map((k, i) =>
     `<span><i class="swatch" style="background:var(${SER[i]})"></i>${esc(data.theaters[k])}</span>`).join("");
   document.getElementById("sevLegend").innerHTML = [1,2,3,4,5].map(s =>
-    `<span><i class="swatch" style="background:var(${SEVV[s-1]})"></i>${s} ${sevName(s)}</span>`).join("");
+    `<span><i class="swatch" style="background:var(${SEVV[s-1]})"></i>${s} ${esc(data.severity_labels[s])}</span>`).join("");
 
   Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", sans-serif';
   Chart.defaults.font.size = 11.5;
   let charts = [];
   const axes = (stacked) => ({
     x: { stacked, grid: { display: false }, border: { color: css("--axis") }, ticks: { color: css("--muted"), maxRotation: 0, autoSkipPadding: 14 } },
-    y: { stacked, beginAtZero: true, grid: { color: css("--grid") }, border: { display: false }, ticks: { color: css("--muted"), precision: 0 } },
+    y: { stacked, beginAtZero: true, grid: { color: css("--grid") }, border: { display: false }, ticks: { color: css("--muted"), precision: 0, callback: v => fmtNum(v) } },
   });
   const tooltip = { backgroundColor: css("--surface"), titleColor: css("--ink"), bodyColor: css("--ink-2"),
-    borderColor: css("--axis"), borderWidth: 1, padding: 10, boxPadding: 4, usePointStyle: true };
+    footerColor: css("--ink-2"), borderColor: css("--axis"), borderWidth: 1, padding: 10, boxPadding: 4, usePointStyle: true };
 
   function render() {
     charts.forEach(c => c.destroy()); charts = [];
@@ -171,20 +184,20 @@ td a { color: var(--ink); text-decoration: none; } td a:hover { text-decoration:
     const shown = state.theater ? [state.theater] : keys;
     const slice = rows => rows.slice(-state.days);
     const labels = slice(data.days).map(fmtDay);
+    const val = (r, f) => r.has_data ? f(r) : null;
 
     // Tiles
     document.getElementById("tiles").innerHTML = keys.map((k, i) => {
       const t = data.trend[k];
-      const rows = slice(data.series[k]);
-      const n = rows.reduce((a, r) => a + r.events, 0);
+      const n = slice(data.series[k]).reduce((a, r) => a + r.violent, 0);
       const dir = t.direction;
       const icon = dir === "rising" ? "▲" : dir === "falling" ? "▼" : dir === "steady" ? "■" : "·";
-      const trendTxt = dir ? `${icon} 7-day heat ${dir} (${t.ratio}× baseline)` : "· not enough history yet";
+      const trendTxt = dir ? `${icon} 7-day heat ${dir} (${t.ratio}× baseline)` : "· building baseline (needs ~3 weeks)";
       return `<button class="card tile" data-k="${k}" aria-pressed="${state.theater === k}">
         <div class="name"><i class="swatch" style="background:var(${SER[i]})"></i>${esc(data.theaters[k])}</div>
-        <div class="val">${n.toLocaleString()} <span class="unit">events · ${state.days}d</span></div>
+        <div class="val">${n.toLocaleString()} <span class="unit">violent events · ${state.days}d</span></div>
         <div class="trend">${trendTxt}</div>
-        <div style="margin-top:6px">${t.max_sev_7d ? sevBadge(t.max_sev_7d) : '<span class="badge">no events 7d</span>'}</div>
+        <div style="margin-top:6px">${t.max_sev_7d ? tierBadge(t.max_sev_7d) : '<span class="badge">none in last 7 days</span>'}</div>
       </button>`;
     }).join("");
     document.querySelectorAll(".tile").forEach(b => b.onclick = () => {
@@ -195,24 +208,25 @@ td a { color: var(--ink); text-decoration: none; } td a:hover { text-decoration:
     charts.push(new Chart(document.getElementById("heatChart"), {
       type: "bar",
       data: { labels, datasets: keys.map((k, i) => ({
-        label: data.theaters[k], data: slice(data.series[k]).map(r => r.heat),
+        label: data.theaters[k], data: slice(data.series[k]).map(r => val(r, r => r.heat)),
         backgroundColor: css(SER[i]), borderColor: css("--surface"), borderWidth: { top: 1 }, borderRadius: 0,
         hidden: !shown.includes(k), categoryPercentage: 0.9, barPercentage: 0.9,
       })) },
       options: { maintainAspectRatio: false, animation: false, interaction: { mode: "index", intersect: false },
         plugins: { legend: { display: false }, tooltip: { ...tooltip, filter: it => it.raw > 0,
-          footer: items => "Total heat " + items.reduce((a, i) => a + i.raw, 0).toFixed(1) } },
+          callbacks: { label: c => ` ${c.dataset.label}: ${c.raw.toLocaleString()}` },
+          footer: items => items.length ? "Total heat " + Math.round(items.reduce((a, i) => a + i.raw, 0)).toLocaleString() : "No data for this day" } },
         scales: axes(true) },
     }));
 
-    // Severity mix (horizontal bars, share %)
+    // Severity mix
     const mix = [0,0,0,0,0];
     shown.forEach(k => slice(data.series[k]).forEach(r => r.by_sev.forEach((c, i) => mix[i] += c)));
     const tot = mix.reduce((a, b) => a + b, 0) || 1;
     charts.push(new Chart(document.getElementById("mixChart"), {
       type: "bar",
-      data: { labels: [1,2,3,4,5].map(s => `${s} ${sevName(s)}`), datasets: [{
-        data: mix.map(c => +(100 * c / tot).toFixed(1)), counts: mix,
+      data: { labels: [1,2,3,4,5].map(s => `${s} ${data.severity_labels[s]}`), datasets: [{
+        data: mix.map(c => +(100 * c / tot).toFixed(1)),
         backgroundColor: SEVV.map(css), borderRadius: 4, borderSkipped: "start", barPercentage: 0.7 }] },
       options: { indexAxis: "y", maintainAspectRatio: false, animation: false,
         plugins: { legend: { display: false }, tooltip: { ...tooltip, callbacks: {
@@ -222,37 +236,52 @@ td a { color: var(--ink); text-decoration: none; } td a:hover { text-decoration:
           y: { grid: { display: false }, border: { color: css("--axis") }, ticks: { color: css("--ink-2") } } } },
     }));
 
-    // Small multiples: events/day stacked by severity
+    // Small multiples: violent events (tiers 3-5) per day
     const mult = document.getElementById("multiples");
     mult.innerHTML = shown.map(k => `<section class="card"><h3>${esc(data.theaters[k])}</h3>
-      <p class="sub" style="font-size:12px">Events per day by severity</p>
+      <p class="sub" style="font-size:12px">Violent events per day (tiers 3–5)</p>
       <div class="chartbox"><canvas id="m-${k}"></canvas></div></section>`).join("");
     shown.forEach(k => {
       const rows = slice(data.series[k]);
-      const hasVol = rows.some(r => r.volume != null);
       charts.push(new Chart(document.getElementById("m-" + k), {
         type: "bar",
-        data: { labels, datasets: [1,2,3,4,5].map(s => ({
-          label: `${s} ${sevName(s)}`, data: rows.map(r => r.by_sev[s-1]),
+        data: { labels, datasets: [3,4,5].map(s => ({
+          label: `${s} ${data.severity_labels[s]}`, data: rows.map(r => val(r, r => r.by_sev[s-1])),
           backgroundColor: css(SEVV[s-1]), borderColor: css("--surface"), borderWidth: { top: 1 },
           categoryPercentage: 0.9, barPercentage: 0.9 })) },
         options: { maintainAspectRatio: false, animation: false, interaction: { mode: "index", intersect: false },
           plugins: { legend: { display: false }, tooltip: { ...tooltip, filter: it => it.raw > 0,
-            footer: items => { const r = rows[items[0].dataIndex];
-              return [`${r.events} events · heat ${r.heat}`].concat(hasVol && r.volume != null ? [`GDELT coverage: ${r.volume.toLocaleString()} articles`] : []); } } },
+            footer: items => { const r = rows[items[0]?.dataIndex];
+              if (!r || !r.has_data) return "No data for this day";
+              return [`${r.events.toLocaleString()} conflict events in total`,
+                      r.goldstein != null ? `Average Goldstein ${r.goldstein} (−10 = most destabilising)` : ""]; } } },
           scales: axes(true) },
       }));
     });
 
-    // Event table
+    // Coded events table
     const since = data.days[Math.max(0, data.days.length - state.days)];
-    const evs = data.top_events.filter(e => e.day >= since && (!state.theater || e.theaters.includes(state.theater))).slice(0, 25);
-    document.getElementById("events").innerHTML = evs.length ? evs.map(e => `<tr>
-      <td class="when">${fmtDay(e.day)}</td><td>${sevBadge(e.severity)}</td>
-      <td><a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.title)}</a>
-        <div class="cues">${e.theaters.map(t => esc(data.theaters[t] || t)).join(", ")}${e.cues.length ? " · " + e.cues.map(esc).join(", ") : ""}</div></td>
-      <td class="src cues">${esc(e.source)}</td></tr>`).join("")
-      : `<tr><td colspan="4" class="empty">No severity-3+ events in this range yet. Once collection runs, they appear here.</td></tr>`;
+    const seen = new Set();
+    const evs = (data.top_events || [])
+      .filter(e => e.day >= since && (!state.theater || e.theater === state.theater))
+      .sort((a, b) => b.severity - a.severity || b.articles - a.articles)
+      .filter(e => !seen.has(e.url) && seen.add(e.url)).slice(0, 25);
+    document.getElementById("events").innerHTML = evs.length ? evs.map(e => {
+      const actors = [e.actor1, e.actor2].filter(Boolean).join(" → ");
+      return `<tr><td class="when">${fmtDay(e.day)}</td><td>${tierBadge(e.severity)}</td>
+        <td><a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.what[0].toUpperCase() + e.what.slice(1))}${actors ? " · " + esc(actors) : ""}</a>
+          <div class="cues">${esc(data.theaters[e.theater])}${e.location ? " · " + esc(e.location) : ""}</div></td>
+        <td class="src cues">${e.articles}</td></tr>`; }).join("")
+      : `<tr><td colspan="4" class="empty">No coded violent events in this range yet.</td></tr>`;
+
+    // Headlines table
+    const hs = (data.headlines || []).filter(h => h.day >= since && (!state.theater || h.theaters.includes(state.theater))).slice(0, 25);
+    document.getElementById("headlines").innerHTML = hs.length ? hs.map(h => `<tr>
+      <td class="when">${fmtDay(h.day)}</td><td>${headBadge(h.severity)}</td>
+      <td><a href="${esc(h.url)}" target="_blank" rel="noopener">${esc(h.title)}</a>
+        <div class="cues">${h.theaters.map(t => esc(data.theaters[t] || t)).join(", ")}${h.cues.length ? " · " + h.cues.map(esc).join(", ") : ""}</div></td>
+      <td class="src cues">${esc(h.source)}</td></tr>`).join("")
+      : `<tr><td colspan="4" class="empty">No headlines in this range yet.</td></tr>`;
   }
 
   document.querySelectorAll("#range button").forEach(b => b.onclick = () => { state.days = +b.dataset.d; save(); render(); });
