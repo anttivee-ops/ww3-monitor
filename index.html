@@ -253,7 +253,8 @@ td a { color: var(--ink); text-decoration: none; } td a:hover { text-decoration:
           plugins: { legend: { display: false }, tooltip: { ...tooltip, filter: it => it.raw > 0,
             footer: items => { const r = rows[items[0]?.dataIndex];
               if (!r || !r.has_data) return "No data for this day";
-              return [`${r.events.toLocaleString()} conflict events in total`,
+              const partial = r.day === data.days[data.days.length - 1] ? ["Today so far (partial day)"] : [];
+              return [...partial, `${r.events.toLocaleString()} conflict events in total`,
                       r.goldstein != null ? `Average Goldstein ${r.goldstein} (−10 = most destabilising)` : ""]; } } },
           scales: axes(true) },
       }));

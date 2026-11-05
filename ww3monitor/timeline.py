@@ -41,7 +41,8 @@ def build(db, days: int = 90) -> dict:
                 "has_data": d in totals,
             })
         series[t] = rows
-        covered = [r for r in rows if r["has_data"]]
+        # Trend uses complete days only: today's partial day would read as a drop.
+        covered = [r for r in rows if r["has_data"] and r["day"] < end.isoformat()]
         heat = [r["heat"] for r in covered]
         last7 = sum(heat[-7:])
         base = heat[-37:-7]
